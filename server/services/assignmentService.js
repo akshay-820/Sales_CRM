@@ -1,26 +1,38 @@
 const Caller = require("../models/Caller");
 
 function getTodayString() {
-  // Use local date instead of UTC so resets align with your local day
-  // Format: YYYY-MM-DD (en-CA locale gives this by default)
-  return new Date().toLocaleDateString("en-CA");
+    // Use local date instead of UTC so resets align with your local day
+    // Format: YYYY-MM-DD (en-CA locale gives this by default)
+    return new Date().toLocaleDateString("en-CA");
 }
 
 async function resetDailyCountersIfNeeded() {
-  const today = getTodayString();
+    const today = getTodayString();
 
-  // Reset leadsToday for callers whose lastResetDate is not today
-  await Caller.updateMany(
-    {
-      $or: [{ lastResetDate: { $ne: today } }, { lastResetDate: { $exists: false } }],
-    },
-    {
-      $set: {
-        leadsToday: 0,
-        lastResetDate: today,
-      },
-    }
-  );
+    // Reset leadsToday for callers whose lastResetDate is not today
+    await Caller.updateMany(
+        {
+            $or: [
+                { lastResetDate: { $ne: today } },
+                { lastResetDate: { $exists: false } },
+            ],
+        },
+        {
+            $set: {
+                leadsToday: 0,
+                lastResetDate: today,
+            },
+        },
+    );
+}
+
+function getSystemDateInfo() {
+    const now = new Date();
+    return {
+        date: now.toLocaleDateString("en-CA"), // YYYY-MM-DD
+        day: now.toLocaleDateString("en-US", { weekday: "long" }), // e.g., "Monday"
+        timestamp: now.toISOString(),
+    };
 }
 
 /**
@@ -33,67 +45,63 @@ async function resetDailyCountersIfNeeded() {
  * @returns {Promise<Caller|null>} The assigned caller or null if none eligible
  */
 async function assignCallerForLead(lead) {
-  const state = lead?.state;
+    const state = lead?.state;
+    await resetDailyCountersIfNeeded();
 
-  await resetDailyCountersIfNeeded();
+    // 1. Try to find eligible callers in the specific state
+    let eligible = [];
+    if (state) {
+        const statePool = await Caller.find({
+            isActive: true,
+            assignedStates: state,
+        });
 
-  // 3. Filter pool: callers where assignedStates includes lead.state
-  let poolQuery = { isActive: true };
-
-  if (state) {
-    poolQuery.assignedStates = state;
-  }
-
-  let pool = await Caller.find(poolQuery);
-
-  // If pool is empty, use ALL active callers
-  if (!pool.length) {
-    pool = await Caller.find({ isActive: true });
-  }
-
-  if (!pool.length) {
-    return null;
-  }
-
-  // 4. Remove callers where leadsToday >= dailyLeadLimit
-  // Interpret dailyLeadLimit=0 as "no limit" to avoid blocking new callers
-  const eligible = pool.filter((caller) => {
-    const limit = caller.dailyLeadLimit || 0;
-    const todayCount = caller.leadsToday || 0;
-
-    if (limit <= 0) {
-      return true;
+        eligible = statePool.filter((caller) => {
+            const limit = caller.dailyLeadLimit || 0;
+            const todayCount = caller.leadsToday || 0;
+            return limit <= 0 || todayCount < limit;
+        });
     }
 
-    return todayCount < limit;
-  });
+    // 2. Fallback: If no one in that state is eligible, check ALL active callers
+    if (eligible.length === 0) {
+        const generalPool = await Caller.find({ isActive: true });
 
-  // 5. If no one is eligible → assign null (handle gracefully)
-  if (!eligible.length) {
-    return null;
-  }
+        eligible = generalPool.filter((caller) => {
+            const limit = caller.dailyLeadLimit || 0;
+            const todayCount = caller.leadsToday || 0;
+            return limit <= 0 || todayCount < limit;
+        });
+    }
 
-  // 6. Sort eligible by lastAssignedAt (oldest first)
-  eligible.sort((a, b) => {
-    if (!a.lastAssignedAt && !b.lastAssignedAt) return 0;
-    if (!a.lastAssignedAt) return -1;
-    if (!b.lastAssignedAt) return 1;
-    return a.lastAssignedAt - b.lastAssignedAt;
-  });
+    // 3. Final Exit: No one available anywhere
+    if (eligible.length === 0) {
+        return null;
+    }
 
-  const chosen = eligible[0];
+    // 4. Round-Robin Sorting (Oldest assignment first)
+    eligible.sort((a, b) => {
+        const timeA = a.lastAssignedAt
+            ? new Date(a.lastAssignedAt).getTime()
+            : 0;
+        const timeB = b.lastAssignedAt
+            ? new Date(b.lastAssignedAt).getTime()
+            : 0;
+        return timeA - timeB;
+    });
 
-  // 7. Increment that caller's leadsToday, set lastAssignedAt = now
-  chosen.leadsToday = (chosen.leadsToday || 0) + 1;
-  chosen.lastAssignedAt = new Date();
-  await chosen.save();
+    const chosen = eligible[0];
 
-  // 8. Return caller
-  return chosen;
+    // 5. Update and Save
+    chosen.leadsToday = (chosen.leadsToday || 0) + 1;
+    chosen.lastAssignedAt = new Date();
+    await chosen.save();
+
+    return chosen;
 }
 
 module.exports = {
-  assignCallerForLead,
-  getTodayString,
+    assignCallerForLead,
+    getTodayString,
+    resetDailyCountersIfNeeded,
 };
-

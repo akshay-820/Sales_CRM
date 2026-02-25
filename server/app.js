@@ -16,6 +16,8 @@ const PORT = process.env.PORT || 5000;
 const MONGO_URI =
     process.env.MONGO_URI || "mongodb://127.0.0.1:27017/sales_crm";
 
+const { resetDailyCountersIfNeeded } = require("./services/assignmentService");
+
 // Basic middleware
 app.use(cors());
 app.use(express.json());
@@ -45,6 +47,8 @@ async function start() {
         });
 
         console.log("Connected to MongoDB");
+
+        await resetDailyCountersIfNeeded();
 
         // Initialize Socket.io with the HTTP server
         initSocket(server);

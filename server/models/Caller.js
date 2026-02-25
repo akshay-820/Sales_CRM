@@ -27,6 +27,9 @@ const callerSchema = new mongoose.Schema(
         assignedStates: {
             type: [String],
             default: [],
+            set: function (states) {
+                return states.map((s) => s.trim()); // Clean input data
+            },
         },
         isActive: {
             type: Boolean,

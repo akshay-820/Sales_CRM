@@ -1,0 +1,144 @@
+{
+    "name": "Google Sheet to Lead Ingestion API",
+    "nodes": [
+        {
+            "parameters": {
+                "pollTimes": {
+                    "item": [
+                        {
+                            "mode": "everyMinute"
+                        }
+                    ]
+                },
+                "documentId": {
+                    "__rl": true,
+                    "value": "1lUGM3NqeNThqM6PBpHPfibc7okPZgfI3v-aDElYVoKc",
+                    "mode": "list",
+                    "cachedResultName": "Lead_Ingestion_System",
+                    "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1lUGM3NqeNThqM6PBpHPfibc7okPZgfI3v-aDElYVoKc/edit?usp=drivesdk"
+                },
+                "sheetName": {
+                    "__rl": true,
+                    "value": "gid=0",
+                    "mode": "list",
+                    "cachedResultName": "Sheet1",
+                    "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1lUGM3NqeNThqM6PBpHPfibc7okPZgfI3v-aDElYVoKc/edit#gid=0"
+                },
+                "event": "rowUpdate",
+                "options": {}
+            },
+            "id": "eb3b39d7-4317-4b8a-9f67-e4c43da703fc",
+            "name": "Watch for New Leads",
+            "type": "n8n-nodes-base.googleSheetsTrigger",
+            "typeVersion": 1,
+            "position": [256, 304],
+            "credentials": {
+                "googleSheetsTriggerOAuth2Api": {
+                    "id": "gci1B4YLQ07EvRyz",
+                    "name": "Google Sheets Trigger account"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "method": "POST",
+                "url": "https://53de-106-51-198-233.ngrok-free.app/api/leads/ingest",
+                "sendBody": true,
+                "bodyParameters": {
+                    "parameters": [
+                        {
+                            "name": "name",
+                            "value": "={{ $json.Name }}"
+                        },
+                        {
+                            "name": "phone",
+                            "value": "={{ $json.Phone }}"
+                        },
+                        {
+                            "name": "state",
+                            "value": "={{ $json.State }}"
+                        },
+                        {
+                            "name": "leadSource",
+                            "value": "={{ $json['Lead Source'] }}"
+                        }
+                    ]
+                },
+                "options": {}
+            },
+            "id": "746b5adc-2a11-4add-aba8-507fe2933a5c",
+            "name": "Send to API",
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.4,
+            "position": [640, 304]
+        },
+        {
+            "parameters": {
+                "conditions": {
+                    "options": {
+                        "caseSensitive": true,
+                        "leftValue": "",
+                        "typeValidation": "strict",
+                        "version": 3
+                    },
+                    "conditions": [
+                        {
+                            "id": "8ec9fc51-11a2-4022-bbce-768d11eb04fc",
+                            "leftValue": "={{ $json.Status }}",
+                            "rightValue": "DONE",
+                            "operator": {
+                                "type": "string",
+                                "operation": "contains"
+                            }
+                        }
+                    ],
+                    "combinator": "and"
+                },
+                "options": {}
+            },
+            "type": "n8n-nodes-base.filter",
+            "typeVersion": 2.3,
+            "position": [464, 304],
+            "id": "648acf4b-fef2-4119-a73c-7243c02189b8",
+            "name": "Filter",
+            "retryOnFail": true,
+            "maxTries": 3
+        }
+    ],
+    "pinData": {},
+    "connections": {
+        "Watch for New Leads": {
+            "main": [
+                [
+                    {
+                        "node": "Filter",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Filter": {
+            "main": [
+                [
+                    {
+                        "node": "Send to API",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        }
+    },
+    "active": true,
+    "settings": {
+        "availableInMCP": false
+    },
+    "versionId": "add8ee31-7a23-4826-a8ca-1e593e66cabc",
+    "meta": {
+        "templateCredsSetupCompleted": true,
+        "instanceId": "591592bc48204cf25195db53357771d01cfef8fd752302839fb6dc6659305dc5"
+    },
+    "id": "rLhqS4Buu13J8rR0",
+    "tags": []
+}
